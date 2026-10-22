@@ -1,0 +1,22 @@
+# id; nome; volume total; frequencia. Volume de 2 a 12.
+id;nome;volume;frequencia
+1;Produto 1;10;76
+2;Produto 2;4;50
+3;Produto 3;2;108
+4;Produto 4;9;154
+5;Produto 5;10;40
+6;Produto 6;3;38
+7;Produto 7;8;52
+8;Produto 8;12;10
+9;Produto 9;8;96
+10;Produto 10;3;2
+11;Produto 11;7;72
+12;Produto 12;9;34
+13;Produto 13;9;60
+14;Produto 14;5;54
+15;Produto 15;2;68
+16;Produto 16;6;66
+17;Produto 17;10;44
+18;Produto 18;9;86
+19;Produto 19;4;164
+20;Produto 20;4;54

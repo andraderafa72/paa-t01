@@ -1,0 +1,23 @@
+# compilação
+/build/
+/paa_t01
+/gerar_instancias
+*.o
+*.a
+*.dSYM/
+
+# o programa recria esta pasta
+/resultados/
+
+# LaTeX local; as figuras .png ficam
+doc/*.aux
+doc/*.log
+doc/*.out
+doc/*.toc
+doc/*.fls
+doc/*.fdb_latexmk
+doc/*.synctex.gz
+doc/*.bbl
+doc/*.blg
+
+.DS_Store

@@ -1,0 +1,6 @@
+# produto_a; produto_b; vezes no mesmo pedido
+produto_a;produto_b;vezes
+1;3;8
+1;4;4
+3;4;2
+2;4;1

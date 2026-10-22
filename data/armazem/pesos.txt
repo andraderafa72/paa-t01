@@ -1,0 +1,3 @@
+# alfa do custo de acesso; beta do custo de separacao
+alfa;beta
+1;1

@@ -1,0 +1,7 @@
+# id; capacidade; custo de acesso (menor = mais acessivel)
+id;capacidade;custo_acesso
+1;10;1
+2;6;2
+3;9;3
+4;4;5
+5;20;8
