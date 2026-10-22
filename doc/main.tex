@@ -6,6 +6,7 @@
 \usepackage[brazilian]{babel}
 \usepackage{amsmath,amssymb}
 \usepackage{graphicx}
+\usepackage{float}
 \usepackage{url}
 
 \begin{document}
@@ -67,8 +68,30 @@ x_{ij} &\in \{0,1\}.
 \end{align}
 
 \section{Complexidade}
-Sem o termo de separação, as restrições descrevem uma atribuição com custos lineares.
-O produto \(q_{ik} D_{pr} x_{ip} x_{kr}\) torna a escolha das posições combinatória.
+Sem o termo de separação, cada produto é independente.
+Se \(\beta = 0\) ou \(q_{ik} = 0\), a posição \(j\) fica proibida para o produto \(i\) quando \(v_i > C_j\).
+O restante é uma atribuição de custo \(d_i c_j\), resolvida em tempo polinomial.
+
+Com coocorrência, o problema de decisão é NP-completo.
+A redução parte do arranjo linear mínimo com pesos unitários, NP-completo \cite{garey1976}.
+Dado um grafo não orientado \(G=(V,E)\) com \(n\) vértices e um inteiro \(K\), pergunta-se se existe uma injeção \(\pi\colon V \to \mathbb{Z}\) com \(\sum_{\{u,v\}\in E} |\pi(u)-\pi(v)| \le K\).
+Eliminar inteiros sem vértice não aumenta essa soma.
+A pergunta é a mesma para bijeções \(\pi\colon V \to \{1,\ldots,n\}\).
+
+A instância do armazém fica restrita ao que essa pergunta usa.
+Há \(m = n\) posições, numeradas de 1 a \(n\).
+A capacidade não elimina par algum: \(v_i \le C_j\) para todo produto \(i\) e toda posição \(j\).
+As frequências são nulas e \(\alpha = \beta = 1\).
+A distância é \(D_{pr} = |p-r|\).
+A coocorrência vale \(q_{ik} = 1\) quando \(\{i,k\}\) é aresta e \(q_{ik} = 0\) no caso contrário.
+As soluções viáveis são as bijeções, e o objetivo coincide com a soma do arranjo.
+Existe alocação de custo no máximo \(K\) se e somente se a resposta do arranjo é sim.
+A alocação é um certificado de tamanho \(O(n)\): as restrições e o custo se verificam em tempo polinomial.
+Esse caso particular já é NP-completo.
+A otimização do modelo geral é NP-difícil.
+Na redução, a capacidade e o custo de acesso não entram.
+A dificuldade está na coocorrência junto com a distância \(|p-r|\).
+
 O método deste trabalho é uma heurística e não traz fator de aproximação.
 
 \section{Heurísticas já apresentadas}
@@ -176,12 +199,12 @@ A Tabela~\ref{tab:custos} compara o guloso com essa solução.
 A Tabela~\ref{tab:tempos} compara os tempos das duas avaliações da mesma vizinhança.
 A Figura~\ref{fig:custo} e a Figura~\ref{fig:tempo} mostram as mesmas execuções.
 
-\begin{table*}[t]
+\begin{table}[H]
 \caption{Custo do guloso e da heurística incremental.
 A busca com recálculo completo atingiu os mesmos valores da heurística.}
 \label{tab:custos}
 \centering
-\scriptsize
+\resizebox{\columnwidth}{!}{%
 \begin{tabular}{|l|r|r|r|r|r|r|}
 \hline
 Instância & Acesso G & Sep.\ G & Total G & Acesso H & Sep.\ H & Total H \\
@@ -191,10 +214,10 @@ n50  & 35\,212 & 56\,410 & 91\,622 & 45\,908 & 18\,584 & 64\,492 \\
 n100 & 136\,820 & 268\,536 & 405\,356 & 192\,424 & 61\,475 & 253\,899 \\
 n200 & 567\,460 & 1\,124\,843 & 1\,692\,303 & 793\,994 & 231\,939 & 1\,025\,933 \\
 \hline
-\end{tabular}
-\end{table*}
+\end{tabular}}
+\end{table}
 
-\begin{table}[htbp]
+\begin{table}[H]
 \caption{Uma execução.
 Trocas aceitas até o ótimo local e tempo das duas avaliações.}
 \label{tab:tempos}
@@ -245,6 +268,9 @@ O custo obtido é o mesmo da busca que recalcula a função inteira, com passage
 O limite observado é o ótimo local da vizinhança de trocas.
 
 \begin{thebibliography}{9}
+\bibitem{garey1976}
+M.~R. Garey, D.~S. Johnson, and L.~Stockmeyer, ``Some simplified NP-complete graph problems,'' \emph{Theoretical Computer Science}, vol.~1, pp.~237--267, 1976.
+
 \bibitem{kim2020}
 J.~Kim, F.~Méndez, and J.~Jimenez, ``Storage location assignment heuristics based on slot selection and frequent itemset grouping for large distribution centers,'' \emph{IEEE Access}, vol.~8, pp.~189025--189035, 2020.
 
