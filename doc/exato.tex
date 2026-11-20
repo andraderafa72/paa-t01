@@ -54,8 +54,7 @@ Cada produto ocupa uma posição, cada posição recebe no máximo um produto, e
 Com pesos \(\alpha, \beta \ge 0\), minimiza-se \(\alpha C_{\mathrm{acesso}} + \beta C_{\mathrm{sep}}\).
 O acesso é linear na frequência e no custo da posição.
 A separação soma, para cada par, a coocorrência vezes a distância entre as posições escolhidas.
-Sem separação, o problema é uma atribuição polinomial.
-Com coocorrência, a decisão é NP-completa \cite{garey1976}.
+Sem separação, o problema é uma atribuição polinomial. Com coocorrência, o problema de otimização é NP-difícil. A versão de decisão é que pode ser NP-completa; este relatório não apresenta a redução.
 O Branch and Bound não muda essa dificuldade: só deixa de explorar ramos que, na estimativa mais otimista, não batem o melhor custo conhecido.
 
 \section{Método}
@@ -86,10 +85,10 @@ Ela só descarta um ramo quando o acesso otimista, somado ao que já foi pago, a
 Enquanto o acesso distingue as posições, muitos ramos morrem cedo.
 Quando várias completações têm acesso parecido, a árvore cresce com \(n\) e o limite deixa de cortar a tempo.
 
+No pior caso o número de nós cresce exponencialmente com os produtos, e o Branch and Bound não é polinomial. O custo da busca acompanha a quantidade de nós e o cálculo do limite inferior em cada um. Quando todo produto restante cabe em toda posição livre, esse cálculo é um emparelhamento por ordenação. Quando a capacidade corta algum par, entra o algoritmo húngaro, de custo cúbico no tamanho da atribuição. Nessas avaliações o custo fica da ordem de \(O(N_{\mathrm{nós}} \times n^{3})\), em que \(n\) é o tamanho da atribuição naquele nó. A expressão estima só o cálculo dos limites com o húngaro, não o restante da implementação.
+
 Na folha que melhora o teto, o custo é recalculado pela função objetivo inteira, a mesma da heurística.
-Na inicialização, uma instância de três produtos e uma posição inviável compara o exato com a enumeração de todas as alocações viáveis.
-A heurística para em 95.
-O exato e a enumeração encontram 77.
+Na inicialização, uma instância construída de três produtos e uma posição inviável, distinta de \texttt{armazem} e ausente da Tabela~\ref{tab:comparacao}, compara o exato com a enumeração de todas as alocações viáveis. A heurística para em 95. O exato e a enumeração encontram 77. Em \texttt{armazem}, com quatro produtos, os custos medidos são outros: guloso 77, heurística 73 e exato 73.
 
 \subsection{Metodologia experimental}
 O programa está em C++17, compilado com \texttt{-O2}.
@@ -254,9 +253,6 @@ Um teto maior só em n15 diria se a heurística daquele tamanho é ótima ou só
 Nada disso muda o que já está medido: até 12 produtos a heurística está a menos de 1,1\% do ótimo provado, e além disso não há certificado.
 
 \begin{thebibliography}{9}
-\bibitem{garey1976}
-M.~R. Garey, D.~S. Johnson, and L.~Stockmeyer, ``Some simplified NP-complete graph problems,'' \emph{Theoretical Computer Science}, vol.~1, pp.~237--267, 1976.
-
 \bibitem{kim2020}
 J.~Kim, F.~Méndez, and J.~Jimenez, ``Storage location assignment heuristics based on slot selection and frequent itemset grouping for large distribution centers,'' \emph{IEEE Access}, vol.~8, pp.~189025--189035, 2020.
 
