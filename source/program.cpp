@@ -1,9 +1,10 @@
 #include "program.h"
 
+#include "branch_and_bound/branch_and_bound.h"
 #include "common.h"
-#include "greedy.h"
-#include "improved.h"
-#include "local_search.h"
+#include "greedy/greedy.h"
+#include "improved/improved.h"
+#include "local_search/local_search.h"
 
 #include <algorithm>
 #include <cctype>
@@ -25,6 +26,53 @@ void report_search_progress(const warehouse::SearchProgress& progress) {
     << " | movimentos " << progress.moves_evaluated
     << " | " << common::format_elapsed(progress.elapsed_ms)
     << "\n" << RESET << std::flush;
+}
+
+void report_bound_progress(const warehouse::BoundProgress& progress) {
+  std::cout << YELLOW
+    << ">>> Nós " << progress.nodes
+    << " | podas " << progress.pruned
+    << " | melhor ";
+  if (progress.has_best) {
+    std::cout << progress.best_cost;
+  } else {
+    std::cout << "nenhum";
+  }
+  std::cout << " | " << common::format_elapsed(progress.elapsed_ms)
+    << "\n" << RESET << std::flush;
+}
+
+struct SuiteMarks {
+  std::ofstream* output = nullptr;
+  std::string label;
+  int next = 0;
+};
+
+SuiteMarks g_suite_marks;
+constexpr int kSuiteMarkMinutes[] = {5, 10, 15, 20};
+
+void note_suite_marks(const std::string& label, double elapsed_ms, double cost, long long nodes, long long pruned) {
+  if (g_suite_marks.output == nullptr) {
+    return;
+  }
+  while (g_suite_marks.next < 4 && elapsed_ms >= kSuiteMarkMinutes[g_suite_marks.next] * 60000.0) {
+    *g_suite_marks.output << "marco " << label << " " << kSuiteMarkMinutes[g_suite_marks.next]
+      << " " << cost << " " << nodes << " " << pruned << "\n";
+    g_suite_marks.output->flush();
+    std::cout << "marco " << label << " " << kSuiteMarkMinutes[g_suite_marks.next]
+      << " min | custo " << cost << " | nós " << nodes << " | podas " << pruned << "\n" << std::flush;
+    ++g_suite_marks.next;
+  }
+}
+
+void report_suite_progress(const warehouse::BoundProgress& progress) {
+  report_bound_progress(progress);
+  note_suite_marks(
+    g_suite_marks.label,
+    progress.elapsed_ms,
+    progress.has_best ? progress.best_cost : -1,
+    progress.nodes,
+    progress.pruned);
 }
 
 std::filesystem::path data_root() {
@@ -127,7 +175,28 @@ std::string algorithm_slug(const std::string& name) {
   if (name.find("Heur") != std::string::npos) {
     return "heuristica";
   }
+  if (name.find("Branch") != std::string::npos) {
+    return "branch-and-bound";
+  }
   return "algoritmo";
+}
+
+bool compare_instance(const std::string& label, std::size_t products) {
+  if (products > 20) {
+    return false;
+  }
+  if (label == "armazem") {
+    return true;
+  }
+  if (label.size() < 2 || label[0] != 'n') {
+    return false;
+  }
+  for (std::size_t index = 1; index < label.size(); ++index) {
+    if (std::isdigit(static_cast<unsigned char>(label[index])) == 0) {
+      return false;
+    }
+  }
+  return true;
 }
 
 std::string trim(std::string text) {
@@ -146,8 +215,59 @@ std::string trim(std::string text) {
 void Program::usage() const {
   std::cerr
     << "Uso: paa_t01 [-h, --help]\n"
-    << "  -h, --help  Imprime este texto e encerra.\n";
+    << "     paa_t01 --exato <pasta> <segundos>\n"
+    << "  -h, --help  Imprime este texto e encerra.\n"
+    << "  --exato     Roda o Branch and Bound e acrescenta uma linha em resultados/suites.txt.\n"
+    << "              <segundos> é o teto. 0 segue até provar o ótimo. 1200 são 20 minutos.\n";
   std::exit(0);
+}
+
+void Program::run_exact_cli(const std::string& path, int seconds) {
+  const warehouse::Instance instance = warehouse::load_instance(path);
+  const std::string label = std::filesystem::path(path).filename().string();
+  std::filesystem::create_directories(results_root());
+  const std::filesystem::path out_path = results_root() / "suites.txt";
+  const bool fresh = !std::filesystem::exists(out_path);
+  std::ofstream output(out_path, std::ios::app);
+  if (!output) {
+    throw std::runtime_error("Não foi possível gravar " + out_path.string());
+  }
+  if (fresh) {
+    output << "# tipo instancia n guloso heuristica exato gap_h nos podas tempo_ms status\n";
+    output << "checagem toy 3 95 95 77 0 - - - otimo\n";
+  }
+
+  g_suite_marks.output = &output;
+  g_suite_marks.label = label;
+  g_suite_marks.next = 0;
+  std::cout << ">>> " << label << (seconds > 0 ? " teto " + std::to_string(seconds) + " s" : " sem limite")
+    << "\n" << std::flush;
+  const warehouse::ExactResult result = warehouse::run_branch_and_bound(instance, report_suite_progress, seconds);
+  note_suite_marks(
+    label,
+    result.solution.elapsed_ms,
+    result.solution.total_cost,
+    result.nodes,
+    result.pruned);
+  g_suite_marks.output = nullptr;
+
+  const char* status = "sem solucao";
+  if (result.optimal) {
+    status = "otimo";
+  } else if (result.solution.valid) {
+    status = "tempo esgotado";
+  }
+  output << std::fixed << std::setprecision(3)
+    << "exato " << label << " " << instance.products.size() << " "
+    << result.greedy_cost << " " << result.heuristic_cost << " " << result.solution.total_cost << " "
+    << std::setprecision(2) << result.gap_heuristic << (result.certified ? "" : "*") << " "
+    << result.nodes << " " << result.pruned << " "
+    << std::setprecision(1) << result.solution.elapsed_ms << " " << status << "\n";
+  output.flush();
+  std::cout << "exato " << label << " | heuristica " << result.heuristic_cost
+    << " | exato " << result.solution.total_cost
+    << " | gap " << result.gap_heuristic << (result.certified ? "" : "*")
+    << " | " << status << " | " << common::format_elapsed(result.solution.elapsed_ms) << "\n";
 }
 
 void Program::initialize(int argc, char* argv[]) {
@@ -155,16 +275,68 @@ void Program::initialize(int argc, char* argv[]) {
   m_error.clear();
   m_msg.clear();
 
+  std::string exact_path;
+  int exact_seconds = 0;
+  bool exact_mode = false;
   for (int i = 1; i < argc; ++i) {
     const std::string arg{argv[i]};
     if (arg == "-h" || arg == "--help") {
       usage();
     }
+    if (arg == "--exato") {
+      if (i + 2 >= argc) {
+        usage();
+      }
+      exact_path = argv[++i];
+      try {
+        exact_seconds = std::stoi(argv[++i]);
+      } catch (const std::exception&) {
+        usage();
+      }
+      exact_mode = true;
+    }
+  }
+
+  if (!warehouse::branch_and_bound_self_check()) {
+    std::cerr << "Falha na checagem do Branch and Bound.\n";
+    std::exit(1);
+  }
+
+  if (exact_mode) {
+    try {
+      run_exact_cli(exact_path, exact_seconds);
+    } catch (const std::exception& error) {
+      std::cerr << error.what() << "\n";
+      std::exit(1);
+    }
+    m_state = State::Quitting;
   }
 }
 
 bool Program::has_finished() const {
   return m_state == State::Quitting;
+}
+
+int Program::read_limit_seconds() {
+  std::cout << "Limite em segundos (Enter = sem limite, 1200 = 20 min): " << std::flush;
+  std::string line;
+  if (!read_line(line)) {
+    return -1;
+  }
+  line = trim(line);
+  if (line.empty()) {
+    return 0;
+  }
+  try {
+    const int seconds = std::stoi(line);
+    if (seconds < 0) {
+      throw std::runtime_error("negativo");
+    }
+    return seconds;
+  } catch (const std::exception&) {
+    m_error = "Informe o limite em segundos, ou Enter para não cortar.";
+    return -1;
+  }
 }
 
 bool Program::read_line(std::string& line) {
@@ -181,12 +353,21 @@ void Program::execute_algorithm() {
     return;
   }
 
+  m_has_exact = false;
   if (m_state == State::RunningGreedy) {
     m_result = warehouse::run_greedy(m_instance);
   } else if (m_state == State::RunningLocalSearch) {
     m_result = warehouse::run_local_search(m_instance, report_search_progress);
   } else if (m_state == State::RunningImproved) {
     m_result = warehouse::run_improved(m_instance, report_search_progress);
+  } else if (m_state == State::RunningExact) {
+    const int seconds = read_limit_seconds();
+    if (seconds < 0) {
+      return;
+    }
+    m_exact = warehouse::run_branch_and_bound(m_instance, report_bound_progress, seconds);
+    m_result = m_exact.solution;
+    m_has_exact = true;
   }
 
   m_result.total_cost = warehouse::total_cost(m_result.cost, m_instance.alpha, m_instance.beta);
@@ -246,6 +427,19 @@ void Program::save_outputs() {
          << "Ocupacao (%): " << m_result.occupancy << "\n"
          << "Validade: " << m_result.validity << "\n"
          << "Resumo: " << m_result.summary << "\n";
+  if (m_has_exact) {
+    report << "Nos explorados: " << m_exact.nodes << "\n"
+           << "Ramos podados: " << m_exact.pruned << "\n"
+           << "Otimo provado: " << (m_exact.optimal ? "sim" : "nao") << "\n"
+           << "Custo guloso: " << m_exact.greedy_cost << "\n"
+           << "Custo busca local: " << m_exact.local_cost << "\n"
+           << "Custo heuristica: " << m_exact.heuristic_cost << "\n"
+           << std::fixed << std::setprecision(2)
+           << "Gap guloso (%): " << m_exact.gap_greedy << "\n"
+           << "Gap busca local (%): " << m_exact.gap_local << "\n"
+           << "Gap heuristica (%): " << m_exact.gap_heuristic << "\n"
+           << "Gap certificado: " << (m_exact.certified ? "sim" : "nao, contra o incumbente") << "\n";
+  }
 
   std::ostringstream solution;
   solution << "Instancia: " << label << "\n"
@@ -352,7 +546,9 @@ void Program::process_events() {
       });
       m_instance = std::move(loaded);
       m_has_result = false;
+      m_has_exact = false;
       m_result = {};
+      m_exact = {};
       m_times.clear();
       record_time("Carregar instância", elapsed_ms);
       m_msg = "Instância carregada: " + std::to_string(m_instance.products.size()) + " produtos, "
@@ -365,13 +561,20 @@ void Program::process_events() {
 
   if (m_state == State::RunningGreedy
       || m_state == State::RunningLocalSearch
-      || m_state == State::RunningImproved) {
+      || m_state == State::RunningImproved
+      || m_state == State::RunningExact) {
     execute_algorithm();
     return;
   }
 
+  if (m_state == State::Comparing) {
+    run_comparison();
+    return;
+  }
+
   if (m_state == State::Welcoming || m_state == State::Helping
-      || m_state == State::ShowingResult || m_state == State::ShowingLog) {
+      || m_state == State::ShowingResult || m_state == State::ShowingCompare
+      || m_state == State::ShowingLog) {
     std::string line;
     read_line(line);
   }
@@ -396,7 +599,8 @@ void Program::update() {
     if (!m_instance.loaded
         && (m_selected == MenuOption::Greedy
             || m_selected == MenuOption::LocalSearch
-            || m_selected == MenuOption::Improved)) {
+            || m_selected == MenuOption::Improved
+            || m_selected == MenuOption::Exact)) {
       m_error = "Carregue uma instância antes de executar.";
       return;
     }
@@ -420,6 +624,12 @@ void Program::update() {
     case MenuOption::Improved:
       m_state = State::RunningImproved;
       break;
+    case MenuOption::Exact:
+      m_state = State::RunningExact;
+      break;
+    case MenuOption::Compare:
+      m_state = State::Comparing;
+      break;
     case MenuOption::Result:
       m_state = State::ShowingResult;
       break;
@@ -440,8 +650,14 @@ void Program::update() {
 
   if (m_state == State::RunningGreedy
       || m_state == State::RunningLocalSearch
-      || m_state == State::RunningImproved) {
+      || m_state == State::RunningImproved
+      || m_state == State::RunningExact) {
     m_state = m_has_result ? State::ShowingResult : State::ReadingMenu;
+    return;
+  }
+
+  if (m_state == State::Comparing) {
+    m_state = m_error.empty() ? State::ShowingCompare : State::ReadingMenu;
     return;
   }
 
@@ -457,10 +673,14 @@ void Program::render() const {
     print_loading();
   } else if (m_state == State::RunningGreedy
              || m_state == State::RunningLocalSearch
-             || m_state == State::RunningImproved) {
+             || m_state == State::RunningImproved
+             || m_state == State::RunningExact
+             || m_state == State::Comparing) {
     print_running();
   } else if (m_state == State::ShowingResult) {
     print_result();
+  } else if (m_state == State::ShowingCompare) {
+    print_compare();
   } else if (m_state == State::ShowingLog) {
     print_log();
   } else if (m_state == State::Helping) {
@@ -580,10 +800,12 @@ void Program::print_menu() const {
   print_row("2. Guloso por frequência");
   print_row("3. Busca local por trocas");
   print_row("4. Heurística aprimorada");
-  print_row("5. Mostrar resultado");
-  print_row("6. Ver log de resultados");
-  print_row("7. Ajuda");
-  print_row("8. Sair");
+  print_row("5. Branch and Bound");
+  print_row("6. Comparar heurística e ótimo");
+  print_row("7. Mostrar resultado");
+  print_row("8. Ver log de resultados");
+  print_row("9. Ajuda");
+  print_row("10. Sair");
   print_row("");
   print_row("Tempos de execução");
   if (m_times.empty()) {
@@ -622,6 +844,10 @@ void Program::print_running() const {
     name = "Busca local por trocas";
   } else if (m_state == State::RunningImproved) {
     name = "Heurística aprimorada";
+  } else if (m_state == State::RunningExact) {
+    name = "Branch and Bound";
+  } else if (m_state == State::Comparing) {
+    name = "comparação nas instâncias pequenas";
   }
 
   std::cout << YELLOW << "\n>>> Executando " << name << "...\n" << RESET;
@@ -675,8 +901,130 @@ void Program::print_result() const {
     << "Ocupação (%): " << m_result.occupancy << "\n"
     << "Validade: " << m_result.validity << "\n"
     << m_result.summary << "\n"
-    << CYAN << "\nTempo de execução: " << common::format_elapsed(m_result.elapsed_ms) << "\n" << RESET
-    << GREEN << "\n>>> Pressione Enter para voltar ao menu...\n" << RESET;
+    << CYAN << "\nTempo de execução: " << common::format_elapsed(m_result.elapsed_ms) << "\n" << RESET;
+
+  if (m_has_exact) {
+    const auto flags = std::cout.flags();
+    std::cout << std::fixed << std::setprecision(3)
+      << "\nCusto guloso: " << m_exact.greedy_cost << "\n"
+      << "Custo busca local: " << m_exact.local_cost << "\n"
+      << "Custo heurística: " << m_exact.heuristic_cost << "\n"
+      << "Custo exato: " << m_exact.solution.total_cost << "\n"
+      << std::setprecision(2)
+      << "Gap guloso (%): " << m_exact.gap_greedy << "\n"
+      << "Gap busca local (%): " << m_exact.gap_local << "\n"
+      << "Gap heurística (%): " << m_exact.gap_heuristic << "\n";
+    std::cout.flags(flags);
+    if (m_exact.certified) {
+      std::cout << "Gap certificado pelo ótimo.\n";
+    } else {
+      std::cout << "Gap contra o incumbente, sem certificado.\n";
+    }
+    std::cout << "Nós explorados: " << m_exact.nodes << "\n"
+      << "Ramos podados: " << m_exact.pruned << "\n";
+  }
+
+  std::cout << GREEN << "\n>>> Pressione Enter para voltar ao menu...\n" << RESET;
+}
+
+void Program::run_comparison() {
+  refresh_catalog();
+  std::ostringstream table;
+  table << std::fixed;
+  table << "instancia | n | guloso | busca local | heuristica | exato | "
+        << "gap guloso % | gap busca % | gap heuristica % | nos | podas | tempo ms | status\n";
+
+  struct Pending {
+    std::string label;
+    warehouse::Instance instance;
+  };
+  std::vector<Pending> pending;
+  for (const std::string& label : m_catalog) {
+    warehouse::Instance instance;
+    try {
+      instance = warehouse::load_instance((data_root() / label).generic_string());
+    } catch (const std::exception& error) {
+      table << label << " | erro | " << error.what() << "\n";
+      continue;
+    }
+    if (!compare_instance(label, instance.products.size())) {
+      continue;
+    }
+    pending.push_back(Pending{label, std::move(instance)});
+  }
+  std::sort(pending.begin(), pending.end(), [](const Pending& left, const Pending& right) {
+    if (left.instance.products.size() != right.instance.products.size()) {
+      return left.instance.products.size() < right.instance.products.size();
+    }
+    return left.label < right.label;
+  });
+
+  bool any = !pending.empty();
+  int seconds = 0;
+  if (any) {
+    seconds = read_limit_seconds();
+    if (seconds < 0) {
+      return;
+    }
+  }
+  for (const Pending& item : pending) {
+    const warehouse::Instance& instance = item.instance;
+    std::cout << YELLOW << ">>> " << item.label << " (" << instance.products.size()
+      << " produtos)\n" << RESET << std::flush;
+    const warehouse::ExactResult result = warehouse::run_branch_and_bound(
+      instance, report_bound_progress, seconds);
+    const char* status = "sem solucao";
+    if (result.optimal) {
+      status = "otimo";
+    } else if (result.solution.valid) {
+      status = "tempo esgotado";
+    }
+    table << item.label << " | " << instance.products.size() << " | "
+          << std::setprecision(3)
+          << result.greedy_cost << " | "
+          << result.local_cost << " | "
+          << result.heuristic_cost << " | "
+          << result.solution.total_cost << " | "
+          << std::setprecision(2)
+          << result.gap_greedy << (result.certified ? "" : "*") << " | "
+          << result.gap_local << (result.certified ? "" : "*") << " | "
+          << result.gap_heuristic << (result.certified ? "" : "*") << " | "
+          << result.nodes << " | "
+          << result.pruned << " | "
+          << std::setprecision(1) << result.solution.elapsed_ms << " | "
+          << status << "\n";
+  }
+  if (!any) {
+    table << "Nenhuma instância entre armazem, n8, n10, n12, n15 e n20.\n";
+  }
+  table << "* gap contra o incumbente, sem certificado de otimalidade.\n";
+  m_compare = table.str();
+
+  try {
+    std::filesystem::create_directories(results_root());
+    const std::filesystem::path path = results_root() / "comparacao.txt";
+    std::ofstream output(path);
+    if (!output) {
+      m_error = "Não foi possível gravar " + path.string();
+      return;
+    }
+    output << m_compare;
+    m_msg = "Arquivo: " + path.generic_string();
+  } catch (const std::exception& error) {
+    m_error = error.what();
+  }
+}
+
+void Program::print_compare() const {
+  std::cout << "\n" << BLUE << BOLD << "Comparação com o ótimo\n" << RESET
+    << m_compare << "\n";
+  if (!m_error.empty()) {
+    std::cout << RED << m_error << "\n" << RESET;
+  }
+  if (!m_msg.empty()) {
+    std::cout << YELLOW << m_msg << "\n" << RESET;
+  }
+  std::cout << GREEN << "\n>>> Pressione Enter para voltar ao menu...\n" << RESET;
 }
 
 void Program::print_log() const {
@@ -718,16 +1066,18 @@ void Program::print_help() const {
   print_row("");
   print_row("Pasta da instância, textos com ';' ou ',':");
   print_row("produtos, posicoes, distancias, coocorrencia, pesos.");
-  print_row("Pastas: armazem, n20, n50, n100, n200.");
+  print_row("Pastas: armazem, n8, n10, n12, n15, n20 e maiores.");
   print_row("");
   print_row("1. Lista as pastas de data/ e carrega pelo número.");
   print_row("2. Guloso por frequência.");
   print_row("3. Busca local por trocas, recálculo completo.");
   print_row("4. Heurística com custo incremental.");
-  print_row("5. Mostra o último posicionamento e o tempo.");
-  print_row("6. Mostra o log gravado em resultados/log.txt.");
-  print_row("7. Esta ajuda.");
-  print_row("8. Encerra.");
+  print_row("5. Branch and Bound. Pede o limite em segundos.");
+  print_row("6. Compara nas pastas armazem, n8, n10, n12, n15 e n20.");
+  print_row("7. Mostra o último posicionamento e o tempo.");
+  print_row("8. Mostra o log gravado em resultados/log.txt.");
+  print_row("9. Esta ajuda.");
+  print_row("10. Encerra.");
   print_rule("");
   std::cout << GREEN << ">>> Pressione Enter para voltar ao menu...\n" << RESET;
 }

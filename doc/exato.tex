@@ -1,0 +1,270 @@
+\documentclass[conference,a4paper]{IEEEtran}
+
+\IEEEoverridecommandlockouts
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[brazilian]{babel}
+\usepackage{amsmath,amssymb}
+\usepackage{graphicx}
+\usepackage{float}
+\usepackage{url}
+
+\begin{document}
+
+\title{Algoritmo exato por Branch and Bound\\
+para alocação de produtos em armazém}
+
+\author{\IEEEauthorblockN{Rafael Andrade Mirapalheta}
+\IEEEauthorblockA{Universidade Federal do Rio Grande do Norte\\
+Natal, Brasil}}
+
+\maketitle
+
+\begin{abstract}
+A heurística de alocação do trabalho complementar reduz o custo em relação ao guloso, mas não prova que o valor obtido é o ótimo.
+Este relatório pergunta até que tamanho um Branch and Bound ainda certifica esse ótimo em tempo limitado, e qual é o gap da heurística quando o certificado existe.
+O exato usa o custo da heurística como teto e poda ramos por um limite inferior de atribuição mínima, que ignora a separação ainda não fixada.
+Até 12 produtos o ótimo é provado e o gap da heurística não passa de 1,09\%.
+Em 15 e 20 produtos a busca de 20 minutos não melhora a heurística nem fecha a prova.
+\end{abstract}
+
+\begin{IEEEkeywords}
+branch and bound, alocação em armazém, atribuição quadrática, gap de otimalidade
+\end{IEEEkeywords}
+
+\section{Introdução}
+O relatório complementar aloca produtos por um guloso de frequência seguido de trocas, com o custo de cada troca calculado de forma incremental.
+Nas instâncias de 20 a 200 produtos o custo cai de cerca de 21\% a 39\% em relação ao guloso \cite{kim2020,wutthisirisart2015,chou2023}.
+Essa queda é medida contra outra heurística.
+Não diz a distância até o ótimo.
+
+A pergunta é até que tamanho a heurística permanece próxima do ótimo, e a partir de quando o exato deixa de certificar esse ótimo num limite de tempo fixo.
+A hipótese é que a busca local fica perto do ótimo nas instâncias em que a prova termina, e que o certificado some antes de 50 produtos, enquanto a heurística ainda produz uma alocação utilizável.
+
+O objetivo é medir essa distância.
+O primeiro passo é um Branch and Bound com a heurística como teto e com limite inferior dado pela atribuição mínima de acesso.
+O segundo é comparar guloso e heurística a essa referência em três suítes definidas pelo tempo.
+O resultado são os gaps certificados até 12 produtos.
+Acima disso, quando a busca para no corte, a referência passa a ser o melhor custo encontrado até ali, não o ótimo.
+
+O modelo é o do relatório da heurística.
+Há \(n\) produtos e \(m\) posições.
+O produto \(i\) tem volume \(v_i\) e frequência \(d_i\); a posição \(j\) tem capacidade \(C_j\) e custo de acesso \(c_j\).
+Cada produto ocupa uma posição, cada posição recebe no máximo um produto, e \(v_i\) não pode exceder \(C_j\).
+Com pesos \(\alpha, \beta \ge 0\), minimiza-se \(\alpha C_{\mathrm{acesso}} + \beta C_{\mathrm{sep}}\).
+O acesso é linear na frequência e no custo da posição.
+A separação soma, para cada par, a coocorrência vezes a distância entre as posições escolhidas.
+Sem separação, o problema é uma atribuição polinomial.
+Com coocorrência, a decisão é NP-completa \cite{garey1976}.
+O Branch and Bound não muda essa dificuldade: só deixa de explorar ramos que, na estimativa mais otimista, não batem o melhor custo conhecido.
+
+\section{Método}
+
+\subsection{Algoritmo}
+A busca aloca um produto por vez, em profundidade, sem guardar a árvore.
+Os produtos entram por frequência decrescente, com desempate pela soma da linha de coocorrência, para decidir cedo um produto muito ligado aos outros.
+Em cada nível, as posições livres que comportam o volume são tentadas da mais barata de acessar para a mais cara.
+A ordem não altera o ótimo: uma solução boa aparece antes, o teto aperta e a poda começa mais cedo.
+
+O teto inicial é o custo da heurística.
+Se ela não posicionar todos os produtos, o teto começa infinito e a primeira solução viável passa a valer.
+Cada nó guarda os produtos já alocados, as posições ocupadas e o custo já determinado: acesso dos produtos colocados e separação só entre eles.
+O limite inferior soma a isso o menor acesso ainda possível:
+\begin{equation}
+LB = \alpha\,(C_{\mathrm{parcial}}^{\mathrm{acesso}} + A_{\mathrm{restante}}) + \beta\,C_{\mathrm{parcial}}^{\mathrm{sep}}.
+\end{equation}
+\(A_{\mathrm{restante}}\) atribui os produtos livres às posições livres, com custo \(d_i c_j\).
+Posição sem capacidade fica proibida.
+Se todo produto restante cabe em toda posição livre, o mínimo emparelha a maior frequência com o menor custo de acesso.
+Se a capacidade corta algum par, o mínimo sai do algoritmo húngaro.
+A separação que ainda envolve produto livre fica de fora.
+
+A omissão é válida porque coocorrência e distância não são negativas: \(LB\) não ultrapassa o custo de completar o nó.
+É um limite frouxo.
+Dois ramos com o mesmo acesso restante e separações futuras diferentes parecem iguais, e a poda não os separa.
+Ela só descarta um ramo quando o acesso otimista, somado ao que já foi pago, alcança o teto.
+Enquanto o acesso distingue as posições, muitos ramos morrem cedo.
+Quando várias completações têm acesso parecido, a árvore cresce com \(n\) e o limite deixa de cortar a tempo.
+
+Na folha que melhora o teto, o custo é recalculado pela função objetivo inteira, a mesma da heurística.
+Na inicialização, uma instância de três produtos e uma posição inviável compara o exato com a enumeração de todas as alocações viáveis.
+A heurística para em 95.
+O exato e a enumeração encontram 77.
+
+\subsection{Metodologia experimental}
+O programa está em C++17, compilado com \texttt{-O2}.
+Cada instância foi resolvida uma vez.
+A busca é determinística: a ordem dos produtos, a das posições e o teto inicial não dependem de sorteio durante a execução.
+Os tempos comparam instâncias nesta compilação e nesta máquina.
+
+As instâncias pequenas saem do gerador do relatório da heurística, com semente 21.
+O nome n\(k\) designa a instância com \(k\) produtos: n8 tem 8, n10 tem 10, e o mesmo vale para n12, n15, n20, n50, n100 e n200.
+Cada tamanho é sorteado de novo, com a mesma semente.
+Não é um recorte de uma instância maior.
+O número de posições é \(m = n + \lfloor n/5 \rfloor\): n8 tem 9, n10 tem 12, n12 tem 14, n15 tem 18 e n20 tem 24.
+O volume de cada produto é inteiro de 2 a 12 e a capacidade sempre comporta qualquer volume, então nesses arquivos a capacidade não elimina alocações.
+A exceção é \texttt{armazem}, com 4 produtos e 5 posições, em que alguns pares são inviáveis.
+Ela entra na suíte rápida para exercitar o limite inferior com capacidade, não só o emparelhamento por frequência.
+n50, n100 e n200 já estavam medidas no outro relatório e não entram no exato: a curva de n10 para n12, na seção de resultados, as coloca fora de um teto de 20 minutos.
+
+A suíte rápida verifica o algoritmo e a coincidência com o ótimo quando a árvore é pequena.
+Exige ótimo provado em segundos: a checagem de três produtos, \texttt{armazem}, n8 e n10.
+n10 é o maior tamanho que ainda fechou perto de 1~s.
+
+A suíte de até 20 minutos pergunta se o certificado ainda existe no tamanho seguinte, n12.
+Se a busca terminar, o gap da heurística usa o ótimo.
+Se o tempo acabar, a referência do gap é o melhor custo encontrado até o corte.
+
+A suíte acima de 20 minutos registra o que se pode afirmar quando a prova não cabe no teto.
+n15 e n20 rodam até o corte, com anotações aos 5, 10, 15 e 20 minutos: melhor custo, nós e podas.
+n50 e acima ficam de fora do exato e só comparam guloso e heurística.
+
+O gap de um custo \(C\) contra uma referência \(R\) é \((C - R)/R \times 100\).
+Com o ótimo provado, \(R\) é o ótimo.
+No corte de tempo, \(R\) é o melhor custo encontrado até ali: o número diz se o exato melhorou a heurística, não quanto falta para o ótimo.
+O esforço é o tempo, os nós visitados e os ramos podados.
+O menu pergunta o limite em segundos nas opções 5 e 6. Enter, ou zero, não corta a busca.
+As suítes longas usam \texttt{paa\_t01 --exato <pasta> <segundos>}: 1200 são 20 minutos. Cada execução acrescenta uma linha em \texttt{resultados/suites.txt}.
+
+\section{Resultados e discussão}
+Nas seis instâncias do exato, a busca local com recálculo completo atingiu o mesmo custo da heurística incremental.
+No relatório complementar, a diferença entre as duas era de tempo.
+As tabelas usam a heurística como representante das duas.
+A Tabela~\ref{tab:comparacao} compara os custos.
+A Tabela~\ref{tab:esforco} compara o esforço.
+
+\begin{table}[H]
+\caption{Custo do guloso, da heurística e do exato.
+n\(k\) é a instância com \(k\) produtos.
+Em n15 e n20 a coluna Exato é o melhor custo encontrado no corte, não o ótimo.
+O asterisco marca gap contra esse custo, sem certificado.}
+\label{tab:comparacao}
+\centering
+\resizebox{\columnwidth}{!}{%
+\begin{tabular}{|l|r|r|r|r|r|r|}
+\hline
+Instância & Guloso & Heurística & Exato & Gap G (\%) & Gap H (\%) & Status \\
+\hline
+armazém & 77 & 73 & 73 & 5,48 & 0 & ótimo \\
+n8 & 1\,979 & 1\,782 & 1\,782 & 11,05 & 0 & ótimo \\
+n10 & 3\,554 & 2\,763 & 2\,750 & 29,24 & 0,47 & ótimo \\
+n12 & 4\,873 & 3\,984 & 3\,941 & 23,65 & 1,09 & ótimo \\
+n15 & 7\,214 & 5\,736 & 5\,736 & 25,77$^{*}$ & 0$^{*}$ & 20~min \\
+n20 & 13\,717 & 10\,886 & 10\,886 & 26,01$^{*}$ & 0$^{*}$ & 20~min \\
+\hline
+\end{tabular}}
+\end{table}
+
+\begin{table}[H]
+\caption{Esforço do Branch and Bound.
+Em n15 e n20 o tempo é o teto, não o fim da prova.}
+\label{tab:esforco}
+\centering
+\begin{tabular}{|l|r|r|r|}
+\hline
+Instância & Tempo & Nós & Podas \\
+\hline
+armazém & $<0{,}1$~ms & 38 & 25 \\
+n8 & 6,0~ms & 97\,941 & 65\,686 \\
+n10 & 0,96~s & 11\,344\,371 & 8\,959\,917 \\
+n12 & 58,5~s & 596\,687\,024 & 489\,295\,608 \\
+n15 & 20~min & 10\,621\,707\,264 & 9\,039\,639\,425 \\
+n20 & 20~min & 8\,890\,673\,152 & 7\,733\,905\,336 \\
+\hline
+\end{tabular}
+\end{table}
+
+Na suíte rápida a heurística encontra o ótimo em \texttt{armazem} e em n8.
+O guloso fica 5,48\% e 11,05\% acima.
+As trocas recuperam o que o guloso perde ao ignorar a coocorrência.
+Em n10 a heurística deixa o ótimo, com gap de 0,47\%.
+O guloso fica 29,24\% acima: as trocas corrigem a maior parte, e o resto é pequeno.
+n8 visita cerca de \(10^{5}\) nós em 6~ms; n10 visita \(1{,}1 \times 10^{7}\) nós em 0,96~s.
+
+n12 sai desse regime de um segundo e a prova ainda termina.
+O ótimo é 3\,941, contra 3\,984 da heurística e 4\,873 do guloso.
+A heurística paga 43 a mais (1,09\%).
+O guloso paga 932 (23,65\%).
+A busca visita \(5{,}97 \times 10^{8}\) nós e poda \(4{,}89 \times 10^{8}\) ramos em 58,5~s.
+Em relação a n10, o tempo cresce cerca de 60 vezes e os nós cerca de 50, para dois produtos a mais.
+A poda ainda elimina a maior parte dos ramos, mas o restante já não cabe numa execução interativa.
+Até aqui o exato certifica.
+Deixa de ser uma ferramenta de uso repetido.
+
+Em n15 e n20 o corte de 20 minutos para com o melhor custo igual à heurística.
+O gap 0\% não é otimalidade: no intervalo anotado o exato não achou alocação melhor.
+Aos 5, 10, 15 e 20 minutos o custo permanece 5\,736 em n15 e 10\,886 em n20.
+Os nós sobem de \(2{,}7 \times 10^{9}\) a \(1{,}1 \times 10^{10}\) em n15 e de \(2{,}2 \times 10^{9}\) a \(8{,}9 \times 10^{9}\) em n20.
+O guloso fica cerca de 26\% acima desse custo.
+A queda da heurística em relação a ele não é distância ao ótimo: falta saber se existe alocação melhor fora da vizinhança de trocas.
+
+n20 visita menos nós que n15 no mesmo tempo, e a instância não é mais fácil.
+Cada nó de n20 calcula o limite inferior com mais produtos e mais posições.
+A taxa cai de cerca de \(8{,}9 \times 10^{6}\) nós por segundo em n15 para cerca de \(7{,}4 \times 10^{6}\) em n20.
+Menos nós é trabalho mais caro por nó, numa árvore maior.
+Nas duas, o teto da heurística não foi batido.
+
+Até n12 a poda ainda fecha a prova.
+A partir de n15, não.
+O limite inferior continua válido e baixo demais para cortar quando as completações diferem sobretudo na separação.
+Mais horas em n15 poderiam fechar a prova ou achar um custo melhor.
+Não mudam o fato de que esse limite não acompanha o crescimento da coocorrência.
+
+\begin{table}[H]
+\caption{Instâncias em que o exato não foi executado.
+A queda é da heurística em relação ao guloso, não em relação ao ótimo.}
+\label{tab:grandes}
+\centering
+\begin{tabular}{|l|r|r|r|}
+\hline
+Instância & Guloso & Heurística & Queda (\%) \\
+\hline
+n50 & 91\,622 & 64\,492 & 30 \\
+n100 & 405\,356 & 253\,899 & 37 \\
+n200 & 1\,692\,303 & 1\,025\,933 & 39 \\
+\hline
+\end{tabular}
+\end{table}
+
+De n50 a n200 a heurística reduz o custo do guloso em cerca de 30\% a 39\%, como já medido no outro relatório.
+Extrapolar o 1,09\% de n12 para n200 usaria um certificado que este experimento não obteve.
+
+\section{Conclusão}
+Até 10 produtos o gap certificado da heurística não passa de 0,47\%, e em \texttt{armazem} e n8 é zero.
+Em 12 produtos o ótimo é provado em 58,5~s e o gap sobe para 1,09\%.
+O guloso, na mesma faixa, fica entre 5\% e 29\% acima do ótimo.
+As trocas fazem a maior parte dessa aproximação.
+O exato, até esse tamanho, mede o resto.
+
+Em 15 e 20 produtos a busca de 20 minutos não melhora a heurística nem prova que ela seja ótima.
+A partir de 50 produtos a comparação sustentada é só a do guloso com a heurística.
+A proximidade ao ótimo foi observada até 12 produtos.
+O certificado some em 15, antes de 50.
+A heurística continua utilizável onde a prova já não cabe.
+
+As instâncias geradas usam uma semente, e a capacidade, salvo em \texttt{armazem}, não elimina pares.
+Capacidade apertada ou coocorrência mais densa pode mudar o tamanho em que a prova deixa de caber.
+Repetir a mesma corrida não estima variabilidade, porque a busca é determinística.
+Outra semente estimaria.
+O limite inferior não estima a separação futura: a poda permanece correta e, pelos tempos, insuficiente quando o acesso restante não distingue os ramos.
+
+Para certificar além de 12 produtos, o limite inferior precisa de um piso de separação, não de uma estimativa solta.
+Mais sementes diriam se o gap de 1,09\% é estável.
+Um teto maior só em n15 diria se a heurística daquele tamanho é ótima ou só o melhor custo persistente.
+Nada disso muda o que já está medido: até 12 produtos a heurística está a menos de 1,1\% do ótimo provado, e além disso não há certificado.
+
+\begin{thebibliography}{9}
+\bibitem{garey1976}
+M.~R. Garey, D.~S. Johnson, and L.~Stockmeyer, ``Some simplified NP-complete graph problems,'' \emph{Theoretical Computer Science}, vol.~1, pp.~237--267, 1976.
+
+\bibitem{kim2020}
+J.~Kim, F.~Méndez, and J.~Jimenez, ``Storage location assignment heuristics based on slot selection and frequent itemset grouping for large distribution centers,'' \emph{IEEE Access}, vol.~8, pp.~189025--189035, 2020.
+
+\bibitem{wutthisirisart2015}
+P.~Wutthisirisart, J.~S. Noble, and C.~A. Chang, ``A two-phased heuristic for relation-based item location,'' \emph{Computers \& Industrial Engineering}, vol.~82, pp.~94--102, 2015.
+
+\bibitem{chou2023}
+Y.-L. Chou, V.~F. Yu, and C.-H. Wu, ``An efficient data-driven method for storage location assignment under item correlation considerations,'' \emph{International Journal of Systems Science: Operations \& Logistics}, vol.~10, no.~1, Art.~no.~2228447, 2023.
+\end{thebibliography}
+
+\end{document}

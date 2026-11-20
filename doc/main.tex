@@ -162,8 +162,9 @@ Pelo compilador, direto:
 c++ -std=c++17 -O2 -I lib -o paa_t01 \
   source/main.cpp source/program.cpp \
   lib/instance.cpp lib/cost.cpp \
-  lib/greedy.cpp lib/local_search.cpp \
-  lib/improved.cpp
+  lib/greedy/greedy.cpp lib/local_search/local_search.cpp \
+  lib/improved/improved.cpp \
+  lib/branch_and_bound/assignment.cpp lib/branch_and_bound/branch_and_bound.cpp
 c++ -std=c++17 -O2 -o gerar_instancias \
   tools/gerar_instancias.cpp
 ./gerar_instancias
@@ -260,6 +261,7 @@ Na n200, a avaliação incremental foi cerca de 50 vezes mais rápida que o rec�
 Não há número publicado para estas instâncias.
 Os ótimos do QAPLIB não se aplicam: falta o custo linear de acesso, e as matrizes de fluxo e distância não são as de lá.
 A referência interna é o guloso por frequência e a mesma busca local com avaliação completa.
+A comparação com o ótimo, com o protocolo das três suítes e a discussão do gap, está no relatório separado \texttt{doc/exato.tex}.
 
 \section{Conclusão}
 A heurística incremental, partida do guloso por frequência, reduz o custo total nas instâncias geradas de 20 a 200 produtos.

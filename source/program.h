@@ -1,6 +1,7 @@
 #ifndef PROGRAM_H
 #define PROGRAM_H
 
+#include "branch_and_bound/branch_and_bound.h"
 #include "cost.h"
 #include "instance.h"
 
@@ -17,7 +18,10 @@ private:
     RunningGreedy,
     RunningLocalSearch,
     RunningImproved,
+    RunningExact,
+    Comparing,
     ShowingResult,
+    ShowingCompare,
     ShowingLog,
     Helping,
     Quitting,
@@ -28,6 +32,8 @@ private:
     Greedy,
     LocalSearch,
     Improved,
+    Exact,
+    Compare,
     Result,
     Log,
     Help,
@@ -46,17 +52,23 @@ private:
   std::string m_msg;
   warehouse::Instance m_instance;
   warehouse::AllocationResult m_result;
+  warehouse::ExactResult m_exact;
   bool m_has_result = false;
+  bool m_has_exact = false;
+  std::string m_compare;
   std::vector<TimeEntry> m_times;
   std::vector<std::string> m_catalog;
   std::string m_instance_label;
 
   void record_time(const std::string& label, double elapsed_ms);
+  void run_comparison();
   void refresh_catalog();
   void save_outputs();
   void append_log();
 
   void usage() const;
+  void run_exact_cli(const std::string& path, int seconds);
+  int read_limit_seconds();
   bool read_line(std::string& line);
   void execute_algorithm();
 
@@ -67,6 +79,7 @@ private:
   void print_loading() const;
   void print_running() const;
   void print_result() const;
+  void print_compare() const;
   void print_log() const;
 
 public:

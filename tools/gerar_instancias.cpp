@@ -90,7 +90,7 @@ int main() {
   }
   std::filesystem::create_directories(root);
 
-  const int sizes[] = {20, 50, 100, 200};
+  const int sizes[] = {8, 10, 12, 15, 20, 50, 100, 200};
   for (int size : sizes) {
     write_instance(root, size);
   }

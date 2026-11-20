@@ -10,8 +10,9 @@ Entre na pasta `PAA-T01`. Não há biblioteca extra.
 c++ -std=c++17 -O2 -I lib -o paa_t01 \
   source/main.cpp source/program.cpp \
   lib/instance.cpp lib/cost.cpp \
-  lib/greedy.cpp lib/local_search.cpp \
-  lib/improved.cpp
+  lib/greedy/greedy.cpp lib/local_search/local_search.cpp \
+  lib/improved/improved.cpp \
+  lib/branch_and_bound/assignment.cpp lib/branch_and_bound/branch_and_bound.cpp
 
 c++ -std=c++17 -O2 -o gerar_instancias tools/gerar_instancias.cpp
 ./gerar_instancias
@@ -29,7 +30,7 @@ cmake --build build
 ./build/source/paa_t01
 ```
 
-`gerar_instancias` grava `data/n20`, `data/n50`, `data/n100` e `data/n200`. Essas pastas já estão no repositório.
+`gerar_instancias` grava `data/n8`, `data/n10`, `data/n12`, `data/n15`, `data/n20`, `data/n50`, `data/n100` e `data/n200`. Essas pastas já estão no repositório.
 
 ## Menu
 
@@ -37,17 +38,21 @@ cmake --build build
 2. Guloso por frequência.
 3. Busca local por trocas.
 4. Heurística aprimorada. Este é o algoritmo do trabalho.
-5. Mostrar o último resultado.
-6. Ver o log de resultados (`resultados/log.txt`).
-7. Ajuda.
-8. Sair.
+5. Branch and Bound. Usa a heurística como teto e prova o ótimo. O programa pergunta o limite em segundos; Enter segue até o ótimo. 1200 são 20 minutos.
+6. Comparar guloso, busca local, heurística e o exato em `armazem`, `n8`, `n10`, `n12`, `n15` e `n20`, com o mesmo limite.
+7. Mostrar o último resultado.
+8. Ver o log de resultados (`resultados/log.txt`).
+9. Ajuda.
+10. Sair.
 
 A tela mostra o posicionamento e, abaixo da tabela, o custo e o tempo.
 
 Ao fim de cada algoritmo o programa grava, em `resultados/<instancia>/`:
 
 - `relatorio.txt` e `melhor-solucao.txt`, com o último algoritmo executado
-- `relatorio-guloso.txt`, `relatorio-busca-local.txt` e `relatorio-heuristica.txt`
-- `melhor-solucao-guloso.txt`, `melhor-solucao-busca-local.txt` e `melhor-solucao-heuristica.txt`
+- `relatorio-guloso.txt`, `relatorio-busca-local.txt`, `relatorio-heuristica.txt` e `relatorio-branch-and-bound.txt`
+- `melhor-solucao-guloso.txt`, `melhor-solucao-busca-local.txt`, `melhor-solucao-heuristica.txt` e `melhor-solucao-branch-and-bound.txt`
+
+A opção 6 grava `resultados/comparacao.txt`. O gap é `(custo - ótimo) / ótimo * 100`. Sem prova de otimalidade, o gap fica contra o incumbente.
 
 Cada execução também acrescenta uma linha em `resultados/log.txt`. A opção 6 mostra esse arquivo. Se o log ainda não existir, a opção 6 monta o arquivo a partir dos relatórios já gravados em `resultados/`.
